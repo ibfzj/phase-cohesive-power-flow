@@ -431,7 +431,7 @@ def get_convergent_init_conds(net, power_factor: float = 1.0, max_trials: int = 
             else:
                 count_converged += 1
         else:
-            print('Limit not converged has been reached. Only {} samples have been found.'.format(count_converged))
+            #print('Limit not converged has been reached. Only {} samples have been found.'.format(count_converged))
             coeffs_for_p.fill(np.nan)
             break
     return coeffs_for_p

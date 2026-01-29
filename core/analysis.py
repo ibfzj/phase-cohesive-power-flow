@@ -691,6 +691,7 @@ def get_upper_bound_loop(all_v_mins, net, B, ppc_branch, E_adjusted, flows_lin, 
 
         Psi_vals[i] = get_Psi(flows_lin, kappa_min, kappa_max, chi_max, K_min)
 
-    upper_bound = np.arcsin(Psi_vals)  # will be nan where Psi_vals > 1
+    with np.errstate(invalid="ignore"):
+        upper_bound = np.arcsin(Psi_vals)  # will be nan where Psi_vals > 1, ignore error in output
     return upper_bound, Psi_vals
 

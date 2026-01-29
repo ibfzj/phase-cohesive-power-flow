@@ -239,7 +239,7 @@ def plot_region_of_trust(pow_fac_list_a, pow_fac_b=1.0, pow_fac_c=8.0, casenum =
         plt.show()
 
 
-# ===== Figures 4 and 5 =====
+# ===== Figure 4 =====
 
 def build_case_context(casenum: int):
     """
@@ -331,6 +331,7 @@ def plot_Fig_4_panels(
     hist_freq,
     hist_binsize,
     # Metadata
+    panel_labels=("a", "b", "c"),
     filename=None
 ):
     """
@@ -372,7 +373,7 @@ def plot_Fig_4_panels(
     ax0.legend(loc='lower right', fontsize=16)
     ax0.set_title('Fixed power injections')
 
-    ax0.text(0.02, 0.95, "(a)", transform=ax0.transAxes, fontsize=20, fontweight='bold', va='top', ha='left')
+    ax0.text(0.02, 0.95, f"({panel_labels[0]})", transform=ax0.transAxes, fontsize=20, fontweight='bold', va='top', ha='left')
 
     # ---------------- Panel (b): randomized injections ----------------
     ax1.grid(True)
@@ -385,7 +386,7 @@ def plot_Fig_4_panels(
     ax1.legend(loc='lower right', fontsize=16)
     ax1.set_title('Randomized power injections')
 
-    ax1.text(0.02, 0.95, "(b)", transform=ax1.transAxes, fontsize=20, fontweight='bold', va='top', ha='left')
+    ax1.text(0.02, 0.95, f"({panel_labels[1]})", transform=ax1.transAxes, fontsize=20, fontweight='bold', va='top', ha='left')
 
     # ---------------- Panel (c): histogram ----------------
     ax2.grid(True)
@@ -400,7 +401,7 @@ def plot_Fig_4_panels(
     ax2.axvline(1.0, linestyle='--', color='k')
     ax2.set_title('Randomized power injections')
 
-    ax2.text(0.08, 0.95, "(c)", transform=ax2.transAxes, fontsize=20, fontweight='bold', va='top', ha='left')
+    ax2.text(0.1, 0.95, f"({panel_labels[2]})", transform=ax2.transAxes, fontsize=20, fontweight='bold', va='top', ha='left')
 
     # ---------------- Show/Save ----------------
 
@@ -512,7 +513,7 @@ def load_fig4b_avg_csv(filename: str):
     return pow_fac_list, avg_S1, avg_S2
 
 
-# ===== Figure 6 =====
+# ===== Figure 5 =====
 
 def calculate_impact_of_voltage_stability_on_phase_cohesiveness(net, all_v_mins, pow_fac: float = 1.0):
     """
@@ -583,13 +584,13 @@ def calculate_impact_of_voltage_stability_on_phase_cohesiveness(net, all_v_mins,
     return breaking_point, upper_bound, x, theta_diff
 
 
-def plot_Fig_6_two_cases(
+def plot_Fig_5_two_cases(
     all_v_mins_a, upper_bound_a, x_a, theta_diff_a, breaking_point_a,
     all_v_mins_b, upper_bound_b, x_b, theta_diff_b, breaking_point_b,
-    filename="Fig6.pdf",
+    filename="Fig5.pdf",
 ):
     """
-    Plot Figure 6 with two vertical panels (a) and (b).
+    Plot Figure 5 with two vertical panels (a) and (b).
 
     Inputs are the outputs of calculate_impact_of_voltage_stability_on_phase_cohesiveness:
         breaking_point, all_v_mins, upper_bound, x, theta_diff
@@ -626,7 +627,7 @@ def plot_Fig_6_two_cases(
     else:
         plt.show()
 
-# ===== Figure 7 =====
+# ===== Figure 6 =====
 
 def get_v_bounds_pv_slack_fixed_pq_interval(net, vmin_pq: float, vmax_pq: float):
     """
