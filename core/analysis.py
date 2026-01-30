@@ -62,6 +62,7 @@ def find_bridge_indices_from_ft(N: int, f: np.ndarray, t: np.ndarray):
     Returns:
         list[int]: Edge indices that are bridges.
     """
+    
     f = np.asarray(f, dtype=int)
     t = np.asarray(t, dtype=int)
 
@@ -93,6 +94,7 @@ def gradient(psi):
 
     Returns:
         list[float]: Gradient components for each element of psi."""
+        
     return [(np.arcsin(psi[a] - 2*math.floor((1+psi[a])/2)) + np.pi*math.floor((1+psi[a])/2)) for a in range(len(psi))]
 
 def compute_kappa_chi(K_vec, E, psi_lin):
@@ -111,6 +113,7 @@ def compute_kappa_chi(K_vec, E, psi_lin):
         kappa_over_K (np.ndarray): Line-wise kappa values normalized by K[e] (shape (Ne,)).
         chi_over_K (np.ndarray): Line-wise chi values normalized by K[e] (shape (Ne,)).
     """
+    
     Ne = len(K_vec)
     K_matrix = np.diag(K_vec)
 
