@@ -1,0 +1,14 @@
+name: loadflow_existence
+channels:
+  - conda-forge
+dependencies:
+  - ipykernel=7.1.0
+  - matplotlib=3.10.8
+  - numba=0.63.1
+  - numpy=1.26.4
+  - pandapower=2.14.9
+  - pandas=2.3.3
+  - python=3.10.14
+  - scipy=1.15.2
+  - tqdm=4.67.1
+
