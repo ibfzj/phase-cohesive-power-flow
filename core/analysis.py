@@ -474,13 +474,16 @@ def adjust_incidence_matrix_for_positive_flows(E: np.ndarray, flows: np.ndarray)
     """
     Flip incidence columns so that all flows are nonnegative (see text just before Eq 73).
     """
+    
     E_adj = E.copy()
     neg = flows < 0
     E_adj[:, neg] *= -1.0
+    
     return E_adj
 
 def get_K_min_max_edges_pp(ppc_branch: np.ndarray, v_min: np.ndarray, v_max: np.ndarray):
     """Eq. 93, computed per physical branch from PPC branch data."""
+    
     br = np.asarray(ppc_branch)
 
     status = br[:, BR_STATUS].real.astype(int)
@@ -650,6 +653,7 @@ def get_vm_profile_pv_fixed_others_one(net):
     Returns:
         np.ndarray: Voltage magnitudes per bus for use in K_e = B_ij v_i v_j.
     """
+    
     Nn = len(net.bus)
     vm = np.ones(Nn, dtype=float)
 
@@ -670,6 +674,7 @@ def get_vm_profile_pv_fixed_others_one(net):
 
 def get_Psi(flows_lin, kappa_min, kappa_max, chi_max, K_min):
     # Eq 94: max_e max( |f - kappa_min + chi|/Kmin, |f - kappa_max - chi|/Kmin )
+    
     if np.any(K_min == 0):
         raise ValueError("K_min contains zero values, division error.")
 
@@ -678,6 +683,7 @@ def get_Psi(flows_lin, kappa_min, kappa_max, chi_max, K_min):
     return float(np.max(np.maximum(psi_lo, psi_hi)))
 
 def get_upper_bound_loop(all_v_mins, net, B, ppc_branch, E_adjusted, flows_lin, f, t):
+    
     Nn = len(net.bus)
     list_of_bridges = find_bridges(Nn, f, t)
     v_max = compute_v_max_from_B(net, B)
@@ -696,5 +702,5 @@ def get_upper_bound_loop(all_v_mins, net, B, ppc_branch, E_adjusted, flows_lin, 
 
     with np.errstate(invalid="ignore"):
         upper_bound = np.arcsin(Psi_vals)  # will be nan where Psi_vals > 1, ignore error in output
+        
     return upper_bound, Psi_vals
-
