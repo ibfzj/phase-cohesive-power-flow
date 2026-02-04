@@ -186,6 +186,7 @@ def get_loads(K_matrix, flows):
     Returns:
         list[float]: Load values per edge, defined as flows[e] / K_matrix[e, e].
     """
+    
     return [flows[e]/K_matrix[e, e] for e in range(len(flows))]
 
 ## functions below are adapted from Philipp and Carsten's code with some changes:
