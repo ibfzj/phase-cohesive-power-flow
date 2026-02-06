@@ -37,7 +37,7 @@ def plot_Fig1(K_list=(0.5, 1.0, 1.5), fmin=-5.5, fmax=5.5, npts=5000, filename="
     """
     f_e = np.linspace(fmin, fmax, npts)
 
-    plt.figure(figsize=(6, 4))
+    plt.figure(figsize=(6, 2.5))
 
     colors = ['#DC143C', 'navy', '#228B22']
 
@@ -561,10 +561,15 @@ def calculate_impact_of_voltage_stability_on_phase_cohesiveness(net, all_v_mins,
     # Flip edges so flows are nonnegative
     E_adjusted = adjust_incidence_matrix_for_positive_flows(E, flows_lin)
     flows_lin_flipped = (np.diag(K_nom) @ (E_adjusted.T @ theta_dc))
+    # Flip endpoints too
+    f_adj = f_ppc.copy()
+    t_adj = t_ppc.copy()
+    neg = flows_lin < 0
+    f_adj[neg], t_adj[neg] = t_adj[neg], f_adj[neg]
 
     # Compute upper bound curve
     upper_bound, Psi_vals = get_upper_bound_loop(all_v_mins=all_v_mins, net=net, B=B, ppc_branch=ppc_branch,
-        E_adjusted=E_adjusted, flows_lin=flows_lin_flipped, f=f_ppc, t=t_ppc,)
+        E_adjusted=E_adjusted, flows_lin=flows_lin_flipped, f=f_adj, t=t_adj)
 
     # Find "breaking point": first v_min where Psi <= 1
     ok = Psi_vals <= 1.0
@@ -678,7 +683,7 @@ def compute_case_data_for_powfac_uncertain(pow_fac: float = 1.0, vmin: float = 0
     base = compute_region_of_trust(pow_fac, casenum)
 
     net_pp   = base["net"]
-    psi_lin  = base["psi_lin"]
+    p = base["p"]
 
     Nn = len(net_pp.bus)
 
@@ -687,8 +692,28 @@ def compute_case_data_for_powfac_uncertain(pow_fac: float = 1.0, vmin: float = 0
     ppc_branch = net_pp._ppc["branch"]
     f_ppc, t_ppc, E, K_nom_vec = build_E_and_K_from_ppc_branch(ppc_branch, vm_pu_for_K)
 
-    # DC flows for nominal K
-    f_lin = psi_lin * K_nom_vec
+    L = E @ np.diag(K_nom_vec) @ E.T
+
+    slack_bus = int(net_pp.ext_grid["bus"].iloc[0])
+    mask = np.ones(L.shape[0], dtype=bool)
+    mask[slack_bus] = False
+
+    theta_dc = np.zeros(L.shape[0], dtype=float)
+    theta_dc[mask] = np.linalg.solve(L[np.ix_(mask, mask)], p[mask])
+    theta_dc[slack_bus] = 0.0
+
+    # DC flows and angles for nominal K
+    f_lin = np.diag(K_nom_vec) @ (E.T @ theta_dc)
+
+    # Flip edges so flows are nonnegative
+    E_adjusted = adjust_incidence_matrix_for_positive_flows(E, f_lin)
+    f_lin_flipped = np.diag(K_nom_vec) @ (E_adjusted.T @ theta_dc)
+
+    # Flip endpoints too
+    f_adj = f_ppc.copy()
+    t_adj = t_ppc.copy()
+    neg = f_lin < 0
+    f_adj[neg], t_adj[neg] = t_adj[neg], f_adj[neg]
 
     # Voltage bounds at buses (PQ uncertain, PV and slack fixed)
     v_min, v_max = get_v_bounds_pv_slack_fixed_pq_interval(net_pp, vmin, vmax)
@@ -700,7 +725,7 @@ def compute_case_data_for_powfac_uncertain(pow_fac: float = 1.0, vmin: float = 0
     list_of_bridges = find_bridges(Nn, f_ppc, t_ppc)
 
     # Corollary 5 metrics
-    kappa_max, kappa_min, chi_max = compute_edge_metrics(E, K_min, K_max, f_lin, list_of_bridges, f_ppc, t_ppc)
+    kappa_max, kappa_min, chi_max = compute_edge_metrics(E_adjusted, K_min, K_max, f_lin_flipped, list_of_bridges, f_adj, t_adj)
 
     # Convert to loads using nominal K
     kappa_lo_unc  = kappa_min / K_nom_vec    # kappa_min / K_nom
@@ -748,8 +773,8 @@ def plot_error_bounds_with_uncertain_voltages(pow_fac: float = 1.0, v_range_a=(0
     markers = [".", "."]
     ranges  = [v_range_a, v_range_b]
     labels  = [
-        rf"$v \in [{v_range_a[0]:.2f}, {v_range_a[1]:.2f}]$",
-        rf"$v \in [{v_range_b[0]:.2f}, {v_range_b[1]:.2f}]$",
+        rf"$v \in [{v_range_a[0]:.2f}, {v_range_a[1]:.3f}]$",
+        rf"$v \in [{v_range_b[0]:.2f}, {v_range_b[1]:.3f}]$",
     ]
 
     for (vmin, vmax), color, marker, label in zip(ranges, colors, markers, labels):
