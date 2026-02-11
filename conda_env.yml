@@ -1,4 +1,4 @@
-name: loadflow_existence
+name: phase-cohesive-power-flow
 channels:
   - conda-forge
 dependencies:
