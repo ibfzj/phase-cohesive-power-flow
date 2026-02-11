@@ -55,7 +55,7 @@ def construct_ppgraph_from_pandapower_and_run_pf(net):
     """
     Runs lossless power flow analysis on a given pandapower network and extracts relevant data.
 
-    Parameters:
+    Args:
     net (pandapowerNet): The input power system network.
 
     Returns:
@@ -111,6 +111,10 @@ def construct_ppgraph_from_pandapower_and_run_pf(net):
     B_matrix = Ybus.imag 
     B = np.array(B_matrix.toarray())
 
+    # Check whether the matrix is symmetric and whether off-diagonal parts are non-negative
+    assert np.allclose(B, B.T)
+    assert np.all(B - np.diag(np.diag(B)) >= -1e-12)
+
     # Extract edges (branches)
     br = np.asarray(net._ppc["branch"])
     br = br[br[:, BR_STATUS].real.astype(int) > 0]
@@ -133,6 +137,7 @@ def build_E_and_K_from_ppc_branch(ppc_branch: np.ndarray, vm_pu: np.ndarray):
     For each in-service branch e=(f,t):
         tau_e = TAP if TAP != 0 else 1
         K_e   = (1 / (x_e * tau_e)) * v_f * v_t
+    See page 21 here: https://matpower.org/docs/MATPOWER-manual-4.1.pdf 
 
     Args:
         ppc_branch (np.ndarray): pandapower branch matrix, shape (Ne, ncols).
@@ -270,9 +275,6 @@ def get_convergent_sol_given_p(net, p: np.ndarray, nn_resolve_tries = 250):
     _, _, E, K_vec = build_E_and_K_from_ppc_branch(ppc_branch, vm_pu)
     K_matrix = np.diag(K_vec)
 
-    count_not_converged = 0
-    count_converged = 0
-
     perturb_factor = 1e-5
 
     # Linear solution
@@ -290,18 +292,16 @@ def get_convergent_sol_given_p(net, p: np.ndarray, nn_resolve_tries = 250):
         retry_count += 1
 
     if np.isnan(thetas_nonlin).any():
-        count_not_converged += 1
         psi_nonlin = np.nan
         flows_nonlin = np.nan
     else:
         flows_nonlin = K_matrix @ np.sin(E.T @ thetas_nonlin)
         psi_nonlin = get_loads(K_matrix, flows_nonlin)
-        count_converged += 1
 
     return psi_lin, psi_nonlin, thetas_lin, thetas_nonlin, flows_lin, flows_nonlin
 
 # --- Functions related to finding valid alternative power injection vectors ---
-# entirely copied from philipp and carsten
+# From https://zenodo.org/records/13325174 (code accompanying "Synchronized states of power grids and oscillator networks by convex optimization")
 def get_orth_basis_hyperplane(normal_vector, check=True):
     """Finds n-1 vectors that are orthonormal to the normal vector of the hyperplane. These n-1 "basis" vectors represent coordinates on the hyperplane.
 
@@ -401,7 +401,20 @@ def sample_balanced_p(N_nodes: int, basis_for_p_plane: list, power_factor: float
 
 def get_convergent_init_conds(net, power_factor: float = 1.0, max_trials: int = 10000):
     """Find coefficients for creating power injections that will surely converge up to given power factor.
-    Try max_trials times until successful."""
+    Try max_trials times until successful.
+
+    Args:
+        net (pandapowerNet): Pandapower network (having run power flow).
+        power_factor (float, optional): Scaling power factor applied to the
+            injection vector. Defaults to 1.0.
+        max_trials (int, optional): Maximum number of random samples tested.
+            Defaults to 10000.
+
+    Returns:
+        np.ndarray: Coefficient vector of length (N-1) parameterizing the balanced
+        injection in the chosen basis. Returns an array of NaNs if no convergent
+        sample is found within max_trials.
+    """
     ppc_branch = net._ppc["branch"]
     vm_pu = net.res_bus.vm_pu.to_numpy()
     _, _, E, K_vec = build_E_and_K_from_ppc_branch(ppc_branch, vm_pu)

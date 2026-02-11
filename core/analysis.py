@@ -66,14 +66,14 @@ def find_bridge_indices_from_ft(N: int, f: np.ndarray, t: np.ndarray):
     f = np.asarray(f, dtype=int)
     t = np.asarray(t, dtype=int)
 
-    # multiplicities of unordered pairs
+    # Multiplicities of unordered pairs
     pairs = [tuple(sorted((uu, vv))) for uu, vv in zip(f, t)]
     mult = Counter(pairs)
 
-    # simple graph for bridge structure
+    # Simple graph for bridge structure
     G = nx.Graph()
     G.add_nodes_from(range(N))
-    G.add_edges_from(pairs)  # duplicates irrelevant in simple graph
+    G.add_edges_from(pairs)  # Duplicates irrelevant in simple graph
 
     bridge_pairs = {tuple(sorted(e)) for e in nx.bridges(G)}
 
@@ -137,7 +137,7 @@ def compute_kappa_chi(K_vec, E, psi_lin):
     return kappa_over_K, chi_over_K
 
 
-# ===== Figures 4, 5 =====
+# ===== Figure 4 =====
 
 def get_max_loads(psi_lin: np.ndarray, psi_nonlin: np.ndarray, kappa_over_K: np.ndarray, chi_over_K: np.ndarray):
     """
@@ -206,6 +206,22 @@ def compute_S1_S2(net, p: np.ndarray, E_matrix: np.ndarray, K_vec: np.ndarray, n
 def get_max_line_load_default_powinj(net, p_base: np.ndarray, pow_fac_list, E_matrix, K_vec):
     """
     Fig 4a: Compute S1 and S2 for scaled versions of a fixed base power injection.
+
+    For each power factor p_f in pow_fac_list, the base injection vector p_base
+    is scaled as p = p_f * p_base, and the corresponding (S1, S2) values are
+    calculated via compute_S1_S2.
+
+    Args:
+        net (pandapowerNet): Pandapower network (having run power flow).
+        p_base (np.ndarray): Base (balanced) power injection vector (length Nn).
+        pow_fac_list (array-like): List or array of power-factor scalings p_f.
+        E_matrix (np.ndarray): Node–edge incidence matrix (shape (Nn, Ne)).
+        K_vec (np.ndarray): Line coupling coefficients (length Ne).
+
+    Returns:
+        all_S1s (list[float]): S1 values for each p_f in pow_fac_list.
+        all_S2s (list[float]): S2 values for each p_f in pow_fac_list.
+
     """
     all_S1s, all_S2s = [], []
 
@@ -271,45 +287,6 @@ def get_p_coeff_list(net, pow_fac_list, trial_num: int, min_success: int = 1, ma
 
     return p_coeff_list
 
-'''
-#a previous version of the function that is replaced with something better.
-def get_max_line_load_randomized_powinj(net, pow_fac_list, p_coeff_list, E_matrix, K_vec, basis_for_p_plane=None):
-    """
-    Fig 4b: Compute averaged S1 and S2 over randomized balanced injections.
-    """
-    if basis_for_p_plane is None:
-        NN = len(net.bus)
-        basis_for_p_plane = get_orth_basis_hyperplane(np.ones(NN), check=True)
-
-    all_S1s, all_S2s = [], []
-
-    for pow_fac in pow_fac_list:
-        sel_S1s, sel_S2s = [], []
-
-        for p_c in p_coeff_list:
-            p_vec = sum(
-                coeff_n * np.asarray(basis_for_p_plane[nn]) * pow_fac
-                for nn, coeff_n in enumerate(p_c)
-            )
-
-            S1, S2 = compute_S1_S2(net, p_vec, E_matrix, K_vec, norepeat=False)
-            sel_S1s.append(S1)
-            sel_S2s.append(S2)
-
-            n_nan = np.isnan(sel_S1s).sum()
-            if n_nan > 0:
-                print(pow_fac, "NaNs:", n_nan, "out of", len(sel_S1s))
-
-
-        all_S1s.append(sel_S1s)
-        all_S2s.append(sel_S2s)
-
-    avg_S1s = [np.nanmean(S1s) for S1s in all_S1s]
-    avg_S2s = [np.nanmean(S2s) for S2s in all_S2s]
-
-    return avg_S1s, avg_S2s
-'''
-
 def get_max_line_load_randomized_powinj_fixedNsamples(net, pow_fac_list, p_coeff_list, E_matrix, K_vec,
     N_target: int, norepeat: bool = False):
     """
@@ -320,6 +297,21 @@ def get_max_line_load_randomized_powinj_fixedNsamples(net, pow_fac_list, p_coeff
     Any sample that fails at any pf is discarded entirely.
     This is relevant because, for Case 30 in approx 1% of cases,
     some samples do not converge at lower pf than the maximal.
+
+    Args:
+        net (pandapowerNet): Pandapower network (having run power flow).
+        pow_fac_list: List of power-factor scalings p_f.
+        p_coeff_list: List of (Nn-1)-dimensional coefficient vectors
+            defining balanced injection directions.
+        E_matrix (np.ndarray): Node–edge incidence matrix, shape (Nn, Ne).
+        K_vec (np.ndarray): Line coupling coefficients, length Ne.
+        N_target (int): Number of convergent for all pf samples to keep.
+        norepeat (bool, optional): If True, solve nonlinear PF only once per sample;
+            otherwise, allow retries with perturbed initial conditions.
+
+    Returns:
+        avg_S1s (list[float]): Mean S1 for each p_f in pow_fac_list (length len(pow_fac_list)).
+        avg_S2s (list[float]): Mean S2 for each p_f in pow_fac_list (same length).
     """
 
     NN = E_matrix.shape[0]
@@ -390,6 +382,17 @@ def get_max_line_load_randomized_powinj_fixedNsamples(net, pow_fac_list, p_coeff
 def get_non_default_S1_S2_hist(net, powfac, trialnum, E_matrix, K_vec):
     """
     Fig 4c: Generate S1 and S2 samples for random balanced injections at fixed power factor.
+
+    Args:
+        net (pandapowerNet): Pandapower network (having run power flow).
+        powfac (float): Fixed scaling power factor p_f for all samples.
+        trialnum (int): Number of random samples to draw.
+        E_matrix (np.ndarray): Node–edge incidence matrix, shape (Nn, Ne).
+        K_vec (np.ndarray): Line coupling coefficients, length Ne.
+
+    Returns:
+        all_S1 (list[float]): List of S1 values from each trial.
+        all_S2 (list[float]): List of S2 values from each trial.
     """
     NN = len(net.bus)
     basis_for_p_plane = get_orth_basis_hyperplane(np.ones(NN), check=True)
@@ -433,10 +436,9 @@ def get_S1_S2_hist_pf1_target_success(net, N_success: int, E_matrix: np.ndarray,
         progress_every (int, optional): Print progress every this many attempts. Defaults to 2000.
 
     Returns:
-        tuple:
-            S1 (np.ndarray): Converged S1 values (length <= N_success).
-            S2 (np.ndarray): Converged S2 values (length <= N_success).
-            attempted (int): Number of attempted samples.
+        S1 (np.ndarray): Converged S1 values (length <= N_success).
+        S2 (np.ndarray): Converged S2 values (length <= N_success).
+        attempted (int): Number of attempted samples.
     """
     if seed is not None:
         np.random.seed(seed)
@@ -468,11 +470,19 @@ def get_S1_S2_hist_pf1_target_success(net, N_success: int, E_matrix: np.ndarray,
     return np.asarray(S1_list, dtype=float), np.asarray(S2_list, dtype=float), attempted
 
 
-# ===== Figures 6, 7 =====
+# ===== Figures 5, 6 =====
 
 def adjust_incidence_matrix_for_positive_flows(E: np.ndarray, flows: np.ndarray):
     """
-    Flip incidence columns so that all flows are nonnegative (see text just before Eq 73).
+    Flip incidence columns so that all flows are nonnegative (see text just before Eq 71).
+
+    Args:
+        E (np.ndarray): Node–edge incidence matrix, shape (Nn, Ne).
+        flows (np.ndarray): Linear (DC) flows on each edge, length Ne.
+
+    Returns:
+        np.ndarray: Modified incidence matrix with all edges oriented such that
+        the associated flows are nonnegative.
     """
     
     E_adj = E.copy()
@@ -482,7 +492,23 @@ def adjust_incidence_matrix_for_positive_flows(E: np.ndarray, flows: np.ndarray)
     return E_adj
 
 def get_K_min_max_edges_pp(ppc_branch: np.ndarray, v_min: np.ndarray, v_max: np.ndarray):
-    """Eq. 93, computed per physical branch from PPC branch data."""
+    """  
+    Compute per-branch lower and upper bounds on the coupling coefficients
+    K_{nm} = B_{nm} v_n v_m from pandapower PPC branch data (Eq 90).
+
+    Only in-service branches are retained. For each branch e = (f, t) with
+    series reactance x_e and off-nominal tap ratio tau_e, the base susceptance
+    is taken as 1/(x_e * tau_e), and the voltage bounds are applied edge-wise.
+
+    Args:
+        ppc_branch (np.ndarray): pandapower PPC branch matrix.
+        v_min (np.ndarray): Lower voltage bounds per bus, length Nn.
+        v_max (np.ndarray): Upper voltage bounds per bus, length Nn.
+
+    Returns:
+        Kmin (np.ndarray): Lower bounds on K_e for each in-service branch.
+        Kmax (np.ndarray): Upper bounds on K_e for each in-service branch.
+    """
     
     br = np.asarray(ppc_branch)
 
@@ -507,7 +533,7 @@ def get_K_min_max_edges_pp(ppc_branch: np.ndarray, v_min: np.ndarray, v_max: np.
 
 def compute_edge_metrics(E, K_min, K_max, f_lin, list_of_bridges, f, t):
     """
-    Computes error bars around linear solution for the case of uncertain voltages: Eqs 77-79.
+    Computes error bars around linear solution for the case of uncertain voltages: Eqs 75-77.
 
     Parameters:
     - E: Node-edge incidence matrix.
@@ -522,11 +548,11 @@ def compute_edge_metrics(E, K_min, K_max, f_lin, list_of_bridges, f, t):
     - chi_max: chi_max values for each edge.
     """
 
-    # Compute L_max and Pi_max projection matrix (Eq 75)
+    # Compute L_max and Pi_max projection matrix (Eq 73)
     L_max = E @ np.diag(K_max) @ E.T
     Pi_max = np.eye(E.shape[1]) - np.diag(K_max) @ E.T @ np.linalg.pinv(L_max) @ E
 
-    # Compute g_min and g_max for each edge (Eq 73)
+    # Compute g_min and g_max for each edge (Eq 71)
     g_min = np.arcsin(f_lin / K_max)
     g_max = np.arcsin(f_lin / K_min)
 
@@ -578,9 +604,20 @@ def compute_edge_metrics(E, K_min, K_max, f_lin, list_of_bridges, f, t):
 
 def get_bus_masks_and_vmref(net):
     """
-    Return boolean masks for PQ/PV/Slack buses and a vm_ref vector where PV+slack
-    are set to their reference values and all others are 1.0.
+    Classify buses into PQ, PV, and slack and construct a reference voltage profile.
+
+    Args:
+        net (pandapowerNet): Pandapower network.
+
+    Returns:
+        is_pq (np.ndarray): Boolean mask, True for PQ buses.
+        is_pv (np.ndarray): Boolean mask, True for PV buses.
+        is_slack (np.ndarray): Boolean mask, True for slack buses.
+        vm_ref (np.ndarray): Reference voltage magnitudes per bus, where
+            PV and slack buses are set to their pandapower setpoints and
+            all other (PQ) buses are set to 1.0 pu.
     """
+
     Nn = len(net.bus)
     vm_ref = np.ones(Nn, dtype=float)
 
@@ -604,17 +641,38 @@ def get_bus_masks_and_vmref(net):
 
 def compute_v_min(net, v_min_pq: float):
     """
-    v_min: PQ buses set to v_min_pq; PV+slack fixed to reference values.
+    Construct lower voltage bounds.
+
+    PQ buses are set to a uniform lower bound v_min_pq, while
+    PV and slack buses are kept at their reference voltage setpoints.
+
+    Args:
+        net (pandapowerNet): Pandapower network.
+        v_min_pq (float): Lower voltage bound for all PQ buses.
+
+    Returns:
+        v_min (np.ndarray): Bus-wise lower voltage bound profile.
     """
     is_pq, _, _, vm_ref = get_bus_masks_and_vmref(net)
     v_min = vm_ref.copy()
     v_min[is_pq] = float(v_min_pq)
     return v_min
 
-def compute_v_max_from_B(net, B: np.ndarray) -> np.ndarray:
+def compute_v_max_from_B(net, B: np.ndarray):
     """
-    v_max: PV+slack fixed to reference voltages; PQ buses set using Lemma-1
-    formula and then unified to a single max across PQ buses.
+    Compute an upper bound on voltage magnitudes using the susceptance matrix (Eq 88).
+
+    PV and slack buses are kept at their reference voltage setpoints.
+    For PQ buses, an upper bound is computed using Eq 88.
+
+    Args:
+        net (pandapowerNet): Pandapower network.
+        B (np.ndarray): Nodal susceptance matrix (imaginary part of Ybus).
+
+    Returns:
+        v_max (np.ndarray): Bus-wise upper voltage bound profile.
+            If no valid bound can be computed for PQ buses, the reference
+            profile is returned.
     """
     is_pq, is_pv, is_slack, vm_ref = get_bus_masks_and_vmref(net)
 
@@ -673,7 +731,19 @@ def get_vm_profile_pv_fixed_others_one(net):
 
 
 def get_Psi(flows_lin, kappa_min, kappa_max, chi_max, K_min):
-    # Eq 94: max_e max( |f - kappa_min + chi|/Kmin, |f - kappa_max - chi|/Kmin )
+    """
+    Compute the worst-case phase-cohesiveness quantity Psi (Eq 93).
+
+    Args:
+        flows_lin (np.ndarray): DC line flows (assumed nonnegative after orientation).
+        kappa_min (np.ndarray): Lower bound correction term per edge.
+        kappa_max (np.ndarray): Upper bound correction term per edge.
+        chi_max (np.ndarray): Error per edge.
+        K_min (np.ndarray): Lower bound on line couplings.
+
+    Returns:
+        Psi (float): Phase-cohesiveness quantity Psi.
+    """
     
     if np.any(K_min == 0):
         raise ValueError("K_min contains zero values, division error.")
@@ -683,7 +753,30 @@ def get_Psi(flows_lin, kappa_min, kappa_max, chi_max, K_min):
     return float(np.max(np.maximum(psi_lo, psi_hi)))
 
 def get_upper_bound_loop(all_v_mins, net, B, ppc_branch, E_adjusted, flows_lin, f, t):
-    
+    """
+    Sweep over lower voltage bounds and compute the corresponding upper bound
+    on phase differences.
+
+    For each candidate v_min, this function:
+      - constructs edge-wise coupling bounds (K_min, K_max),
+      - computes edge error metrics via Corollary 5,
+      - evaluates the phase-cohesiveness quantity Psi,
+      - converts Psi to an angle bound via arcsin.
+
+    Args:
+        all_v_mins: Sequence of candidate lower voltage bounds for PQ buses.
+        net (pandapowerNet): Pandapower network.
+        B (np.ndarray): Nodal susceptance matrix.
+        ppc_branch (np.ndarray): pandapower PPC branch matrix.
+        E_adjusted (np.ndarray): Incidence matrix with edges oriented so flows are nonnegative.
+        flows_lin (np.ndarray): DC line flows (after orientation).
+        f (np.ndarray): From-bus indices of in-service branches (oriented consistently with E_adjusted).
+        t (np.ndarray): To-bus indices of in-service branches (oriented consistently with E_adjusted).
+
+    Returns:
+        upper_bound (np.ndarray): Angle bounds arcsin(Psi) for each v_min.
+        Psi_vals (np.ndarray): Raw Psi values before arcsin.
+    """
     Nn = len(net.bus)
     list_of_bridges = find_bridges(Nn, f, t)
     v_max = compute_v_max_from_B(net, B)

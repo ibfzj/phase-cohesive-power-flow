@@ -29,11 +29,25 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib.lines import Line2D
 
-# ===== Figure 1 =====
+# ===== Figure 2 =====
 
-def plot_Fig1(K_list=(0.5, 1.0, 1.5), fmin=-5.5, fmax=5.5, npts=5000, filename="F_fe_plot.pdf"):
+def plot_Fig2(K_list=(0.5, 1.0, 1.5), fmin=-5.5, fmax=5.5, npts=5000, filename="F_fe_plot.pdf"):
     """
-    Intro figure: plot F_e(f_e) for several fixed K_e values.
+    Plot the function mathcal{F}_e(f_e) for several fixed coupling values K_e.
+
+    This produces the introductory figure by evaluating F(f_e, K_e) on a grid of flow values
+    and plotting one curve per K_e.
+
+    Args:
+        K_list (tuple[float, ...]): Coupling values K_e to include in the plot.
+        fmin (float): Minimum flow value f_e.
+        fmax (float): Maximum flow value f_e.
+        npts (int): Number of sampling points for f_e.
+        filename (str | None): If not None, saves the figure as a PDF to this path.
+            If None, the plot is shown interactively.
+
+    Returns:
+        None
     """
     f_e = np.linspace(fmin, fmax, npts)
 
@@ -68,12 +82,28 @@ def plot_Fig1(K_list=(0.5, 1.0, 1.5), fmin=-5.5, fmax=5.5, npts=5000, filename="
 
 def compute_region_of_trust(pow_fac: float, casenum):
     """
-    Computes data for Fig 3 for case30 or case118:
-    - builds the pandapower network
-    - runs power flow
-    - computes linear and nonlinear line loads
-    - computes error bounds
-    - returns everything needed for plotting Figure 3.
+    Compute line loads and deterministic error bounds for a test case.
+
+    For the specified IEEE test case (case30 or case118), this routine:
+      - builds the pandapower network and runs a lossless AC power flow,
+      - scales the base injections by pow_fac,
+      - computes the linear (DC) and nonlinear (AC) edge loads,
+      - computes the region of trust bounds (kappa/K and chi/K).
+
+    Args:
+        pow_fac (float): Scalar factor multiplying the base active power injections.
+        casenum (int): Test case identifier (30 or 118).
+
+    Returns:
+        dict: Dictionary containing:
+            net (pandapowerNet): Solved pandapower network.
+            vm_pu (np.ndarray): Bus voltage magnitudes from the AC solution.
+            thetas (np.ndarray): Bus voltage angles (radians) from the AC solution.
+            p (np.ndarray): Base active-power injections (per-unit).
+            psi_lin (np.ndarray): Linear (DC) edge loads.
+            psi_nonlin (np.ndarray): Nonlinear (AC) edge loads (np.nan if not converged).
+            kappa_over_K (np.ndarray): Error term per edge, normalized by K.
+            chi_over_K (np.ndarray): Error term per edge, normalized by K.
     """
     # Build and solve pandapower case30
     if casenum == 30:
@@ -118,11 +148,16 @@ def plot_region_of_trust(pow_fac_list_a, pow_fac_b=1.0, pow_fac_c=8.0, casenum =
       (b) scatter: difference between load_lin and load_nonlin (y-axis) vs load_lin (x-axis) for pow_fac_b, with error bars (region of trust)
       (c) same as (b) for pow_fac_c
 
-    Arguments:
-        pow_fac_list_a : list of power factors to show in panel (a)
-        pow_fac_b      : power factor for panel (b)
-        pow_fac_c      : power factor for panel (c)
-        figsize        : total figure size
+    Args:
+        pow_fac_list_a (array-like): Power factors shown in panel (a).
+        pow_fac_b (float): Power factor used for panel (b).
+        pow_fac_c (float): Power factor used for panel (c).
+        casenum (int): Test case identifier (30 or 118).
+        filename (str | None): If not None, saves the figure as a PDF to this path.
+            If None, the plot is shown interactively.
+
+    Returns:
+        None
     """
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 5), gridspec_kw={'wspace': 0.2})
@@ -243,10 +278,28 @@ def plot_region_of_trust(pow_fac_list_a, pow_fac_b=1.0, pow_fac_c=8.0, casenum =
 
 def build_case_context(casenum: int):
     """
-    Constructs and saves all data for a given test case. The function loads the specified network,
-    runs an AC power flow, and builds the graph representation, including the node–edge incidence
-    matrix E and line coupling coefficients K_vec, and a basis for balanced power injections,
-    basis_for_p_plane. The output serves as a reusable context object for numerical experiments.
+    Calculate core data structures for a given test case.
+
+    This helper:
+      - loads the specified pandapower test network,
+      - runs a lossless AC power flow,
+      - builds the incidence matrix E and nominal couplings K_vec,
+      - constructs a basis for the balanced-injection hyperplane (sum(p)=0).
+
+    Args:
+        casenum (int): Test case identifier (30 or 118).
+
+    Returns:
+        dict: Context dictionary containing:
+            casenum (int): Case identifier.
+            net (pandapowerNet): Solved pandapower network.
+            vm_pu (np.ndarray): Bus voltage magnitudes from the AC solution.
+            thetas (np.ndarray): Bus voltage angles (radians) from the AC solution.
+            p_base (np.ndarray): Base active power injections (per-unit).
+            E (np.ndarray): Node-edge incidence matrix.
+            K_vec (np.ndarray): Line coupling coefficients (per branch).
+            NN (int): Number of buses.
+            basis_for_p_plane (list[np.ndarray]): Orthonormal basis spanning sum(p)=0.
     """
     if casenum == 30:
         net0 = pn.case30()
@@ -273,9 +326,21 @@ def build_case_context(casenum: int):
 
 def compute_fig4a(ctx, pow_fac_list):
     """
-    Computes the data for Fig. 4(a), corresponding to fixed (default) power injections scaled by pow_fac_list.
-    For each power factor, the function evaluates the maximum nonlinear line load S1 and the corresponding
-    phase-cohesiveness bound S2, using the system context provided. Returns arrays suitable for direct plotting.
+    Compute Fig. 4(a) data: max load and bound for scaled default injections.
+
+    For each power factor in pow_fac_list, this evaluates:
+      S1 = max_e |psi_nonlin,e| and
+      S2 = max_e of the phase-cohesiveness bound.
+
+    Args:
+        ctx (dict): Case context from build_case_context.
+        pow_fac_list: Power factors to evaluate.
+
+    Returns:
+        dict: Dictionary with:
+            pow_fac_list (np.ndarray): Power factors (float).
+            S1 (np.ndarray): Max nonlinear loads for each power factor.
+            S2 (np.ndarray): Max bounds for each power factor.
     """
     net, p_base, E, K_vec = ctx["net"], ctx["p_base"], ctx["E"], ctx["K_vec"]
     S1def, S2def = get_max_line_load_default_powinj(net, p_base, pow_fac_list, E, K_vec)
@@ -283,9 +348,21 @@ def compute_fig4a(ctx, pow_fac_list):
 
 def compute_fig4b_coeffs(ctx, pow_fac_list, trial_num, min_success, max_tries, norepeat=True):
     """
-    Generates a list of randomized, balanced power-injection coefficient vectors that admit convergent power-flow
-    solutions over a prescribed range of power factors. The coefficients are selected by repeated random sampling,
-    subject to convergence criteria, and are reused in Fig. 4(b) to ensure consistent averaging across loading levels.
+    Generate coefficient vectors for randomized balanced injections used in Fig. 4(b).
+
+    The returned coefficient vectors parameterize balanced injection directions that
+    are filtered by convergence criteria across the specified power-factor range.
+
+    Args:
+        ctx (dict): Case context from build_case_context.
+        pow_fac_list (array-like): Power factors to evaluate.
+        trial_num (int): Number of candidate random draws.
+        min_success (int): Minimum number of accepted coefficient vectors.
+        max_tries (int): Maximum number of attempts to reach min_success.
+        norepeat (bool): Passed to the underlying solver screening routine.
+
+    Returns:
+        list[np.ndarray]: List of coefficient vectors defining balanced injection directions.
     """
     net = ctx["net"]
     p_coeff_list = get_p_coeff_list(net, pow_fac_list, trial_num, min_success, max_tries, norepeat)
@@ -293,10 +370,22 @@ def compute_fig4b_coeffs(ctx, pow_fac_list, trial_num, min_success, max_tries, n
 
 def compute_fig4b(ctx, pow_fac_list, p_coeff_list, N_target=200):
     """
-    Computes the data for Fig. 4(b), corresponding to randomized power injections. Using a fixed set of admissible
-    injection coefficients, the function evaluates the average maximum nonlinear line load S1 and the average
-    phase-cohesiveness bound S2 as functions of the loading factor. Only samples that converge for all considered
-    loading levels are included in the averaging.
+    Compute Fig. 4(b) data: averaged max load and bound over randomized injections.
+
+    Using coefficient vectors p_coeff_list, this evaluates S1 and S2 at each power
+    factor and averages them over exactly N_target samples that converge for all pfs.
+
+    Args:
+        ctx (dict): Case context from build_case_context.
+        pow_fac_list (array-like): Power factors to evaluate.
+        p_coeff_list (list[np.ndarray]): Coefficient vectors defining balanced injections.
+        N_target (int): Number of fully valid samples to average over.
+
+    Returns:
+        dict: Dictionary with:
+            pow_fac_list (np.ndarray): Power factors (float).
+            S1 (np.ndarray): Averaged max nonlinear loads.
+            S2 (np.ndarray): Averaged max bounds.
     """
     net, E, K_vec, basis_for_p_plane = ctx["net"], ctx["E"], ctx["K_vec"], ctx["basis_for_p_plane"]
     avg_S1s, avg_S2s = get_max_line_load_randomized_powinj_fixedNsamples(net, pow_fac_list, p_coeff_list, E, K_vec, N_target=N_target,norepeat=False)
@@ -304,8 +393,26 @@ def compute_fig4b(ctx, pow_fac_list, p_coeff_list, N_target=200):
 
 def compute_fig4c_hist(ctx, N_success, max_attempts=200_000, norepeat=True, seed=None, numbins=60):
     """
-    Computes the data for Fig. 4(c). The function collects a prescribed number of convergent randomized samples at pf=1,
-    calculates the ratio S2/S1, and returns a normalized histogram of this ratio.
+    Compute Fig. 4(c) histogram data for the ratio S2/S1 at p_f = 1.
+
+    The routine repeatedly samples balanced injections at p_f=1 and keeps only
+    convergent trials until N_success samples are collected (or max_attempts is hit).
+    It then forms the ratio S2/S1 and returns a normalized histogram.
+
+    Args:
+        ctx (dict): Case context from build_case_context.
+        N_success (int): Number of convergent samples to collect.
+        max_attempts (int): Hard cap on attempt number.
+        norepeat (bool): If True, do not use perturbation-based retries inside the solver.
+        seed (int | None): Random seed for reproducibility.
+        numbins (int): Number of histogram bins.
+
+    Returns:
+        dict: Dictionary with:
+            x (np.ndarray): Bin coordinate array (as constructed from relfreq output).
+            freq (np.ndarray): Relative frequencies (normalized histogram).
+            binsize (float): Bin width.
+            attempted (int): Number of attempted samples.
     """
     net, E, K_vec = ctx["net"], ctx["E"], ctx["K_vec"]
     S1, S2, attempted = get_S1_S2_hist_pf1_target_success(
@@ -343,19 +450,21 @@ def plot_Fig_4_panels(
       (c) Histogram of the ratio S2 / S1 for randomized injections at p_f = 1.
 
     Args:
-        pow_fac_list_a (np.ndarray): Power factors for panel (a).
-        S1def_a (np.ndarray): S1 values for fixed injections.
-        S2def_a (np.ndarray): S2 values for fixed injections.
+        pow_fac_list_a (array-like): Power factors for panel (a).
+        S1def_a (array-like): S1 values for panel (a).
+        S2def_a (array-like): S2 values for panel (a).
+        pow_fac_list_b (array-like): Power factors for panel (b).
+        avg_S1s_b (array-like): Averaged S1 values for panel (b).
+        avg_S2s_b (array-like): Averaged S2 values for panel (b).
+        hist_x (array-like): Histogram x-coordinates (bin centers or left edges).
+        hist_freq (array-like): Histogram frequencies (normalized).
+        hist_binsize (float): Histogram bin width.
+        panel_labels (tuple[str, str, str]): Panel label letters to display.
+        filename (str | None): If not None, saves the figure as a PDF to this path.
+            If None, the plot is shown interactively.
 
-        pow_fac_list_b (np.ndarray): Power factors for panel (b).
-        avg_S1s_b (np.ndarray): Averaged S1 values.
-        avg_S2s_b (np.ndarray): Averaged S2 values.
-
-        hist_x (array-like): Histogram bin centers (or left edges).
-        hist_freq (array-like): Histogram frequencies (already normalized).
-        hist_binsize (float): Bin width for the histogram.
-
-        filename (str, optional): If provided, saves figure to this PDF file named filename.pdf.
+    Returns:
+        None
     """
     cmap = mpl.colormaps['viridis']
     colors = cmap(np.linspace(0, 1, 4))
@@ -517,15 +626,25 @@ def load_fig4b_avg_csv(filename: str):
 
 def calculate_impact_of_voltage_stability_on_phase_cohesiveness(net, all_v_mins, pow_fac: float = 1.0):
     """
-    Prepare data for Figure 6:
-      - computes AC angles from power flow
-      - builds DC flows using Laplacian with per-branch K
-      - flips edge orientations so flows are nonnegative
-      - sweeps v_min(PQ) and computes arcsin(Psi(v_min))
-      - returns breaking_point and arrays for plotting
+    Compute Fig. 5 data: voltage-stability sweep and phase-cohesiveness bound.
+
+    The routine:
+      - runs a lossless AC power flow to obtain the AC angles,
+      - constructs DC angles/flows using the Laplacian with nominal couplings,
+      - orients edges so the DC flows are nonnegative,
+      - sweeps the PQ-bus lower-voltage bound v_min and computes arcsin(Psi(v_min)),
+      - returns the breaking point where Psi first becomes <= 1 (if it occurs).
+
+    Args:
+        net (pandapowerNet): Pandapower network to analyze.
+        all_v_mins (array-like): Grid of PQ lower-bound values v_min to sweep.
+        pow_fac (float): Scalar factor multiplying the base active-power injections.
 
     Returns:
-        breaking_point, upper_bound, x, theta_diff
+        breaking_point (float): First v_min in the sweep for which Psi <= 1 (or the last value if never satisfied).
+        upper_bound (np.ndarray): Array of arcsin(Psi(v_min)) values (may contain nan where Psi>1).
+        x (np.ndarray): Constant x-coordinate array used for scatter points (min of AC vm_pu).
+        theta_diff (np.ndarray): Absolute AC phase differences along (oriented) edges.
     """
 
     # Run power flow
@@ -595,10 +714,29 @@ def plot_Fig_5_two_cases(
     filename="Fig5.pdf",
 ):
     """
-    Plot Figure 5 with two vertical panels (a) and (b).
+    Plot Fig. 5 for two test cases as vertically stacked panels.
 
-    Inputs are the outputs of calculate_impact_of_voltage_stability_on_phase_cohesiveness:
-        breaking_point, all_v_mins, upper_bound, x, theta_diff
+    Inputs correspond to outputs of calculate_impact_of_voltage_stability_on_phase_cohesiveness
+    for two different networks/cases.
+
+    Args:
+        all_v_mins_a: Sweep grid for panel (a).
+        upper_bound_a: arcsin(Psi) curve for panel (a).
+        x_a: Scatter x-coordinates for panel (a).
+        theta_diff_a: Scatter phase differences for panel (a).
+        breaking_point_a: v_min breaking point for panel (a).
+
+        all_v_mins_b: Sweep grid for panel (b).
+        upper_bound_b: arcsin(Psi) curve for panel (b).
+        x_b: Scatter x-coordinates for panel (b).
+        theta_diff_b: Scatter phase differences for panel (b).
+        breaking_point_b: v_min breaking point for panel (b).
+
+        filename (str | None): If not None, saves the figure as a PDF to this path.
+            If None, the plot is shown interactively.
+
+    Returns:
+        None
     """
 
     fig, (ax0, ax1) = plt.subplots(2, 1, figsize=(5.5, 6.5))
@@ -636,12 +774,19 @@ def plot_Fig_5_two_cases(
 
 def get_v_bounds_pv_slack_fixed_pq_interval(net, vmin_pq: float, vmax_pq: float):
     """
-    Construct per-bus voltage bounds:
-      - PQ buses: [vmin_pq, vmax_pq]
-      - PV and slack buses: fixed at reference vm_pu, so vmin=vmax=vm_pu
+    Construct per-bus voltage bounds with PV/slack fixed and PQ in an interval.
+
+    PQ buses are assigned bounds [vmin_pq, vmax_pq]. PV and slack buses are fixed
+    to their reference setpoints, i.e., v_min = v_max = vm_pu.
+
+    Args:
+        net (pandapowerNet): Pandapower network.
+        vmin_pq (float): Lower bound applied to all PQ buses.
+        vmax_pq (float): Upper bound applied to all PQ buses.
 
     Returns:
-        v_min (np.ndarray), v_max (np.ndarray)
+        v_min (np.ndarray): Bus-wise lower voltage bounds.
+        v_max (np.ndarray): Bus-wise upper voltage bounds.
     """
     Nn = len(net.bus)
     v_min = vmin_pq * np.ones(Nn, dtype=float)
@@ -668,16 +813,27 @@ def get_v_bounds_pv_slack_fixed_pq_interval(net, vmin_pq: float, vmax_pq: float)
 
 def compute_case_data_for_powfac_uncertain(pow_fac: float = 1.0, vmin: float = 0.9, vmax: float = 1.1, casenum = 30):
     """
-    Case 30 or Case 118 with uncertain voltages:
-      - uses compute_region_of_trust for when voltages were certain
-      - constructs K_min, K_max from voltage interval [vmin, vmax]
-      - calls compute_edge_metrics to get error estimates
-      - converts them to load-space (divide by nominal K)
+    Compute uncertain-voltage error bounds for a given loading level.
 
-    Returns base dict extended with:
-        kappa_lo_unc  : kappa_min / K_nom
-        kappa_hi_unc  : kappa_max / K_nom
-        chi_unc : chi_max / K_nom
+    Starting from the deterministic solution (compute_region_of_trust), this routine:
+      - builds nominal couplings using PV/slack at reference voltages and PQ to 1 pu,
+      - computes DC angles/flows for the base injections and orients edges so flows are nonnegative,
+      - constructs bus-wise voltage bounds (PQ in [vmin, vmax], PV/slack fixed),
+      - computes edge-wise coupling bounds (K_min, K_max),
+      - computes Corollary 5 error bounds (kappa_min, kappa_max, chi_max),
+      - converts bounds to load space by dividing by K_nom.
+
+    Args:
+        pow_fac (float): Scalar factor multiplying the base active-power injections.
+        vmin (float): Lower bound for PQ voltages.
+        vmax (float): Upper bound for PQ voltages.
+        casenum (int): Test case identifier (30 or 118).
+
+    Returns:
+        dict: The deterministic base dictionary from compute_region_of_trust extended with:
+            kappa_lo_unc (np.ndarray): Lower kappa bound in load units (kappa_min / K_nom).
+            kappa_hi_unc (np.ndarray): Upper kappa bound in load units (kappa_max / K_nom).
+            chi_unc (np.ndarray): Error radius in load units (chi_max / K_nom).
     """
     # Start from existing data when voltages are not uncertain
     base = compute_region_of_trust(pow_fac, casenum)
@@ -741,14 +897,23 @@ def compute_case_data_for_powfac_uncertain(pow_fac: float = 1.0, vmin: float = 0
 def plot_error_bounds_with_uncertain_voltages(pow_fac: float = 1.0, v_range_a=(0.95, 1.05),
     v_range_b=(0.90, 1.10), casenum = 30, filename = None):
     """
-    Plot region of trust with two voltage-uncertainty intervals for case 30
-    and compare to the case when there is no voltage uncertainty.
+    Plot voltage certain and voltage uncertain error bounds around the linear solution.
 
-    Plots, vs edge index e:
-      - deterministic region of trust (no voltage uncertainty) in black
-        (filled band + error bars, same style as Fig. 3(a) for a single p_f),
-      - robust envelopes + error bars for v in v_range_a (colored),
-      - robust envelopes + error bars for v in v_range_b (colored).
+    The plot shows:
+      - error bars for no voltage uncertainty,
+      - two regions of trust for PQ voltages in intervals v_range_a and v_range_b,
+        each shown as a shaded band plus error bars.
+
+    Args:
+        pow_fac (float): Scalar factor multiplying the base active-power injections.
+        v_range_a (tuple[float, float]): First PQ voltage interval (vmin, vmax).
+        v_range_b (tuple[float, float]): Second PQ voltage interval (vmin, vmax).
+        casenum (int): Test case identifier (30 or 118).
+        filename (str | None): If not None, saves the figure as a PDF to this path.
+            If None, the plot is shown interactively.
+
+    Returns:
+        None
     """
     fig, ax = plt.subplots(1, 1, figsize=(6,4))
 
