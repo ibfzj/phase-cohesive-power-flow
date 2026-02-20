@@ -521,6 +521,73 @@ def plot_Fig_4_panels(
     else:
         plt.show()
 
+
+def plot_Fig_4_panels_no_middle(
+    # Panel (a): fixed power injections
+    pow_fac_list_a,
+    S1def_a,
+    S2def_a,
+    # Panel (c): histogram (pf = 1)
+    hist_x,
+    hist_freq,
+    hist_binsize,
+    panel_labels=("a", "c"),
+    filename=None
+):
+    """
+    Fig. 4 with panels (a) and (c) only.
+    Keeps the original panel aspect ratios and height.
+    """
+
+    cmap = mpl.colormaps['viridis']
+    colors = cmap(np.linspace(0, 1, 4))
+
+    # original width was 20 for 3 panels. keep per-panel width
+    fig, (ax0, ax2) = plt.subplots(1, 2, figsize=(20 * 2/3, 6))
+
+    # ---------------- Panel (a) ----------------
+    ax0.grid(True)
+
+    ax0.plot(pow_fac_list_a, S1def_a, '-d', mfc='none',
+             color=colors[0], label=r'$\sin \gamma$')
+    ax0.plot(pow_fac_list_a, S2def_a, '-v', mfc='none',
+             color=colors[1], label=r'$\Psi$')
+
+    ax0.set_xlabel(r'$p_f$', labelpad=-5)
+    ax0.set_ylabel(r'$\max\limits_{e} f_e / K_e$')
+    ax0.legend(loc='lower right', fontsize=16)
+    ax0.set_title('Fixed power injections')
+
+    ax0.text(0.02, 0.95, f"({panel_labels[0]})",
+             transform=ax0.transAxes, fontsize=20,
+             fontweight='bold', va='top', ha='left')
+
+    # ---------------- Panel (c) ----------------
+    ax2.grid(True)
+
+    ax2.bar(hist_x, hist_freq, width=hist_binsize,
+            color=colors[1], label=r'$p_f = 1$')
+
+    ax2.set_yscale('log')
+    ax2.set_xlabel(r'$\Psi / \sin \gamma$')
+    ax2.set_ylabel('Relative frequency')
+    ax2.legend(loc='upper right', fontsize=16)
+
+    ax2.axvline(1.0, linestyle='--', color='k')
+    ax2.set_title('Randomized power injections')
+
+    ax2.text(0.1, 0.95, f"({panel_labels[1]})",
+             transform=ax2.transAxes, fontsize=20,
+             fontweight='bold', va='top', ha='left')
+
+    # ---------------- Show/Save ----------------
+    fig.tight_layout()
+
+    if filename is not None:
+        plt.savefig(filename, format='pdf', bbox_inches='tight')
+    else:
+        plt.show()
+
 # --- Functions for saving data that takes a long time to calculate ---
 
 def save_p_coeff_list_csv_auto(p_coeff_list, case_name: str, pow_fac_list):
@@ -915,7 +982,7 @@ def plot_error_bounds_with_uncertain_voltages(pow_fac: float = 1.0, v_range_a=(0
     Returns:
         None
     """
-    fig, ax = plt.subplots(1, 1, figsize=(6,4))
+    fig, ax = plt.subplots(1, 1, figsize=(6,3.5))
 
     # No voltage uncertainty
     base_det = compute_region_of_trust(pow_fac, casenum)
